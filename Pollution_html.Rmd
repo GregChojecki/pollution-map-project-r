@@ -1,0 +1,586 @@
+---
+title: "Building Interactive Pollution Map with Shiny"
+author: "Greg Chojecki"
+date: "`r Sys.Date()`"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(rvest)
+library(tidyverse)
+library(leaflet)
+library(RKaggle)
+library(httr)
+library(jsonlite)
+```
+
+### 1 Aim
+
+The goal of this project is to build an interactive visualization of air pollution levels for the world’s largest cities.
+The app contains two tabs:
+
+-- Global Overview – a map showing the Air Quality Index (AQI) for major cities worldwide.
+
+-- City-Level Details – a panel displaying up-to-date air quality information for a selected city.
+
+This allows users to explore both broad pollution patterns and specific city conditions in a single interface.
+
+## 1.1 Technologies Used
+
+This project integrates multiple technologies and techniques within a single workflow:
+
+- **R programming** is used throughout for analysis, cleaning, and visualization.  
+- **HTML** is incorporated for formatting elements in tooltips, popups, and UI components.  
+- **Web scraping** retrieves the list of the world's largest cities directly from Wikipedia.  
+- **Data wrangling** prepares and merges multiple datasets into a unified structure.  
+- **Kaggle API access** provides geographic coordinates for global cities.  
+- **Shiny** delivers an interactive pollution map that users can explore dynamically.
+
+Together, these tools demonstrate a complete end-to-end data analysis and interactive visualization pipeline.
+
+
+### 2 Data Source
+
+This project uses the *World Cities* dataset from Kaggle.
+
+#### Important Note for Users
+
+This project uses the World Cities dataset from Kaggle.
+
+Important Note for Users
+
+To reproduce the workflow, you have two options:
+
+1. Use your own Kaggle API credentials
+You will need a valid kaggle.json file obtained from your Kaggle account.
+In this case, you may enable the Kaggle download code chunks.
+
+2. Use the pre-downloaded dataset
+The repository includes a processed file named cities_coord.rds.
+If you choose this option, ensure that all Kaggle-related code chunks are set to eval = FALSE.
+
+Only one of these methods is required to run the project.
+The .rds file is recommended if you do not have Kaggle credentials.
+
+
+### 3 List of largest cities - importing, exploring and data cleaning
+
+We will use wikipedia's world largest cities list for the project:
+[List of largest cities](https://en.wikipedia.org/wiki/List_of_largest_cities).
+
+
+#### 3-1 Table scraping
+Let's scrap all tables from the webpage:
+
+```{r}
+url <- "https://en.wikipedia.org/wiki/List_of_largest_cities"
+tables <- url %>%
+  read_html() %>%
+  html_nodes("table") %>%
+  html_table(fill = TRUE) 
+```
+
+Now we need to identify our target table - let's print all of them.
+
+```{r}
+lapply(tables,print)
+```
+
+There were 4 tables, the table we are interested in is the second one.
+
+```{r}
+cities <- tables[[2]] %>% data.frame()
+```
+
+#### 3-2 Data cleaning
+
+Now we need to see what information (i.e. columns) could be useful.
+```{r}
+colnames(cities)
+```
+
+We will select city name, country, and urban facts: area, population and density.
+
+```{r}
+cities1 <- cities %>% select(c(1,2,8:10))
+
+```
+
+Let's print out first few observations:
+
+```{r}
+cities1 %>% head(10)
+```
+We can remove first two observations, however first we will rename the variables; also, we will need to rename the first column as it contains the `[a]` reference.
+
+```{r}
+cities2 <- cities1 %>% setNames(as.character(cities1 %>% slice(1))) %>% slice(-c(1,2)) %>% rename(City=1)
+cities2 %>% head()
+```
+
+Now we can check if the data type is as we expect it to be: 
+
+  * `character` in case of first two columns, and 
+  * `numeric` in case of the last three columns
+
+
+```{r}
+glimpse(cities2)
+```
+
+We see there are reference square brackets in the column 5 - let's remove them (along with any content).
+```{r}
+pattern1 <- "\\[[A-z0-9]+\\]" # pattern for footnote reference 
+cities2[,5] <- cities2[,5]%>%  str_replace(pattern1," ")
+
+```
+
+There are commas as thousand separators `,` in all last three columns - we shall remove them:
+
+```{r}
+fn <- function(column){gsub(",","",column)} # defined function for substitution
+cities2[,3:5] <-apply(cities2[,3:5],2,fn)
+```
+
+```{r}
+glimpse(cities2)
+```
+
+Now, before we turn the three last columns to numeric (double), we should check if there are only digits - and if not, which observations are non-numeric:
+
+```{r}
+for (i in 3:5){
+  print(cities2[which(!grepl('^[0-9]',cities2[,i])),1])
+  }
+```
+ As we can see, there is something unusual about observation for the city of Foshan:
+ 
+```{r}
+cities2 %>% filter(City=="Foshan")
+```
+ We will discard this observation:
+```{r}
+cities2 <- cities2 %>% filter(City!="Foshan")
+```
+
+Now we can convert three last columns to numeric:
+```{r}
+cities2 <- cities2 %>% mutate(across(3:5, as.numeric))
+```
+
+Let's check if now we are ready to proceed with the dataset:
+```{r}
+glimpse(cities2)
+```
+
+We have our cities with basic facts. Now, we need their respective coordinates so that we can localize them on a map.
+
+### 4 Coordinates
+
+We can use kaggle based list [juanmah/world-cities](https://www.kaggle.com/datasets/juanmah/world-cities). For that we need an account with Kaggle.
+ Please note you need to generate an API key to download any dataset automatically.
+```{r, eval=FALSE}
+cred <- jsonlite::fromJSON("kaggle.json")
+
+kgl_download_custom <- function(owner.dataset) {
+  
+  files <- RKaggle::get_dataset(owner.dataset)
+  
+  # Case 1: RKaggle returned a dataframe directly
+  if (is.data.frame(files)) {
+    return(files)
+  }
+  
+  # Case 2: RKaggle returned file paths
+  csv_file <- files[grepl("\\.csv$", files)][1]
+  df <- read.csv(csv_file, na.strings = c("", NA))
+  return(df)
+}
+cities_coord <- kgl_download_custom("juanmah/world-cities")
+```
+
+We will use here a pre-downloaded file - make sure you have a either a json file with your credentials or you 
+```{r}
+# Load dataset saved earlier
+cities_coord <- readRDS("cities_coord.rds")
+```
+
+Let's first select only the cities that are in our `cities2` dataframe.
+
+```{r}
+cities_coord <- cities_coord %>% filter(city_ascii %in% cities2$City)
+dim(cities_coord)
+```
+
+Now there are apparently duplicates - we will choose the duplicated cities with the highest population.
+
+```{r}
+cities_coord1 <- cities_coord %>% group_by(city_ascii) %>% slice_max(population)
+cities_coord1 %>% dim()
+```
+
+ Now we can use `join` function to get coordinates from the kaggle dataframe.
+ As the number of rows of the filtered kaggle file is smaller than the `cities2`, we will use `right_join` function, which will remove any cities  that don't have geolocation coordinates. 
+ 
+```{r}
+cities3 <- cities2 %>% right_join(cities_coord1, by=c("City"="city_ascii")) 
+head(cities3)
+```
+Now, let's select the variables we are interested in:
+```{r}
+cities4 <- cities3 %>% select(1:5,7,8)
+cities4 %>% head()
+```
+
+ Now we can proceed to the next step.
+ 
+### 5 Displaying cities on the map
+ 
+```{r,message=FALSE,warning=FALSE}
+map <- cities4 %>% leaflet() %>% addTiles() %>% addCircleMarkers(lng=cities4$lng, lat=cities4$lat) %>% addMarkers(popup = ~as.character(City, Population))
+map
+```
+ 
+### 6 Getting polution data
+
+Now we will use pollution data from the [OpenWeatherMap](https://openweathermap.org/). 
+
+Once again, to access the data you will need to start (a free) account with them, and you will need to generate an API key.
+```{r, message=FALSE, echo=FALSE}
+my_api <- "5efb6422618ae7a8803d8ecff42ed261"
+```
+
+The API base URL to get current pollution is `http://api.openweathermap.org/data/2.5/air_pollution`
+
+```{r}
+# URL for Current Weather API
+current_pollution_url <- 'http://api.openweathermap.org/data/2.5/air_pollution'
+```
+
+Next, let's create a list to hold URL parameters for current pollution API. We will use Tokyo as an example, to see what is the structure of the json file.
+
+```{r}
+current_query <- list(lat=cities4 %>% filter(City=="Tokyo") %>% select(lat) %>% pull(lat),lon=cities4 %>% filter(City=="Tokyo") %>% select(lng) %>% pull(lng), appid = my_api, units="metric")
+```
+ 
+ Now we can make a HTTP request to download the cities current pollution status.
+
+```{r}
+response <- GET(current_pollution_url, query=current_query)
+```
+ 
+If we check the response type, we can see it is in JSON format:
+
+```{r}
+json_result <- content(response, as="parsed")
+```
+
+Now let's print the JSON result.
+
+```{r}
+json_result
+```
+ 
+Let's prepare a dataframe to hold information about the selected city.
+ 
+```{r}
+# Create some empty vectors to hold data temporarily
+lat <- c(); lon <- c();aqi <- c(); co <- c();no <- c();no2 <- c();o3 <- c();so2 <- c();pm2_5 <- c();pm_10 <- c();nh3 <- c()
+```
+ 
+ 
+Now we can bind downloaded results with our vectors:
+ 
+```{r}
+lat <- json_result$coord$lon
+lon <- json_result$coord$lat
+aqi <- c(aqi,json_result[["list"]][[1]][["main"]][["aqi"]])
+co <- c(co,json_result[["list"]][[1]][["components"]][["co"]])
+no <- c(no,json_result[["list"]][[1]][["components"]][["no"]])
+no2 <- c(no2,json_result[["list"]][[1]][["components"]][["no2"]])
+o3 <- c(o3,json_result[["list"]][[1]][["components"]][["o3"]])
+so2 <- c(so2,json_result[["list"]][[1]][["components"]][["so2"]])
+pm2_5 <- c(pm2_5,json_result[["list"]][[1]][["components"]][["pm2_5"]])
+pm_10 <- c(pm_10,json_result[["list"]][[1]][["components"]][["pm10"]])
+nh3 <- c(nh3,json_result[["list"]][[1]][["components"]][["nh3"]])
+```
+
+Combine all vectors as columns of a data frame called `pollution_data_frame`:
+```{r}
+# Combine all vectors
+pollution_data_frame <- data.frame(lat=lat,
+                                   lon=lon,
+                                  aqi=aqi, 
+                                 co=co, 
+                                 no=no, 
+                                 no2=no2, 
+                                 o3=o3, 
+                                 so2=so2, 
+                                 pm2_5=pm2_5, 
+                                 pm_10=pm_10, 
+                                 nh3=nh3)
+```
+
+We print out the results:
+
+```{r}
+pollution_data_frame
+```
+
+Now we will loop over all the cities to get a full picture for the 77 selected cities.
+
+```{r}
+#cities4
+
+
+for (i in 1:nrow(cities4)){
+  #Sys.sleep(5)
+  current_query <- list(lat=cities4 %>% filter(City==cities4$City[i]) %>% select(lat) %>% pull(lat),
+                        lon=cities4 %>% filter(City==cities4$City[i]) %>% select(lng) %>% pull(lng),
+                        appid = my_api,
+                        units="metric"
+                        )
+ 
+current_pollution_url <- 'http://api.openweathermap.org/data/2.5/air_pollution' 
+response <- GET(current_pollution_url, query=current_query)
+json_result <- content(response, as="parsed")
+lat <- c(); lon <- c();aqi <- c(); co <- c();no <- c();no2 <- c();o3 <- c();so2 <- c();pm2_5 <- c();pm_10 <- c();nh3 <- c()
+
+city <- cities4$City[i]
+lat <- json_result$coord$lat
+lon <- json_result$coord$lon
+aqi <- c(aqi,json_result[["list"]][[1]][["main"]][["aqi"]])
+co <- c(co,json_result[["list"]][[1]][["components"]][["co"]])
+no <- c(no,json_result[["list"]][[1]][["components"]][["no"]])
+no2 <- c(no2,json_result[["list"]][[1]][["components"]][["no2"]])
+o3 <- c(o3,json_result[["list"]][[1]][["components"]][["o3"]])
+so2 <- c(so2,json_result[["list"]][[1]][["components"]][["so2"]])
+pm2_5 <- c(pm2_5,json_result[["list"]][[1]][["components"]][["pm2_5"]])
+pm_10 <- c(pm_10,json_result[["list"]][[1]][["components"]][["pm10"]])
+nh3 <- c(nh3,json_result[["list"]][[1]][["components"]][["nh3"]])
+
+                 df <- data.frame(city,
+                                    lat=lat,
+                                   lon=lon,
+                                  aqi=aqi, 
+                                 co=co, 
+                                 no=no, 
+                                 no2=no2, 
+                                 o3=o3, 
+                                 so2=so2, 
+                                 pm2_5=pm2_5, 
+                                 pm_10=pm_10, 
+                                 nh3=nh3)
+  
+              if(i==1){
+                      pollution_data_frame <- df
+                    }else{
+                      pollution_data_frame <- rbind(pollution_data_frame,df)
+                    }
+
+}
+pollution_data_frame %>% head()
+
+```
+
+### 7 Display pollution on the map
+
+Let's add the data to the map, with the color indicating the air quality
+
+```{r,message=FALSE,warning=FALSE}
+
+color_levels <- colorFactor(c("darkgreen","#13ED3F", "yellow", "orange","red"), 
+                              levels = c(1,2,3,4,5))
+map <- cities4 %>% leaflet() %>% addTiles() %>% 
+  addCircleMarkers(lng=cities4$lng,
+                   lat=cities4$lat,
+                   color=color_levels(pollution_data_frame$aqi)) %>% 
+  addPopups(popup = ~as.character(City)) %>% 
+  
+    # below - we specify the legend
+    addLegend("bottomright", colors= c("darkgreen","#13ED3F", "yellow", "orange","red"), labels=c("Good","Fair","Moderate","Poor","Very Poor"), title="Current Air Quality") 
+map
+```
+
+### 8 Pollution maps with Shiny
+
+Now we can use put everything together with Shiny; we will also get a separate tab with more detailed results for selected city.I added c
+ 
+```{r, echo=FALSE}
+require(shiny)
+require(leaflet)
+require(DT)
+
+# Create a RShiny UI
+ui <- (
+  fluidPage(theme = bslib::bs_theme(version = 3, bootswatch = "darkly"),# "cerulean", "cosmo", "cyborg", "darkly", "flatly", "journal", "lumen", "paper", "readable", "sandstone", "simplex", "slate", "spacelab", "superhero", "united", "yeti"
+            titlePanel(h1("World big cities air quality",
+                          style=("color:orange; font-weight:bold"),align = "center")), 
+            #,style=("color:red; font-weight:bold;font-family: monospace;")
+HTML("<hr color='purple' >"),
+            tabsetPanel(
+              # Create a side-bar layout
+              tabPanel(h3("Overview"),
+                       sidebarLayout(
+                         # Create a main panel to show cities on a leaflet map
+                         mainPanel(
+                           leafletOutput("cities_map", height = 1000)
+                         ),
+                         # Create a side bar to show detailed plots for a city
+                         sidebarPanel(# i need to show in one line the checkbox and its description, hence division into columns
+                           h4("Hide city names"),
+                           checkboxInput("show_cities",h6(""#,style=("color:red; font-weight:bold;font-family: monospace;")
+                           ) , value = TRUE),
+                           DT::DTOutput("cities_general")
+                           
+                         )# end of sidebarPanel(
+                       ) # end of sidebarLayout( of tabPanel "Overview"
+              ),# end of "Overview" panel
+              tabPanel(h3("Details",
+                          style=("font-weight:bold;")),
+                       sidebarLayout(
+                         # Create a main panel to show cities on a leaflet map
+                         mainPanel(
+                           leafletOutput("city_map", height = 1000)
+                         ),
+                         # Create a side bar to show detailed plots for a city
+                         sidebarPanel(
+                           selectInput("select_city",h4("Select city",style=("font-weight:bold;")) , choices=pollution_data_frame$city,selected = "London"),
+                           #DT::DTOutput("city_details")
+                           #htmlOutput("city_details")
+                           uiOutput("city_details"),
+                           HTML("<hr>"),
+                           h5("For more information on the Air Quality Index (AQI) concept visit: ", a("Wiki AQI", href = "https://en.wikipedia.org/wiki/Air_quality_index#CAQI"))
+                         )# end of sidebarPanel(
+                       ) # end of sidebarLayout( of tabPanel "Overview"         
+                       
+                       
+                       
+              )# end of tabPanel "Details"
+            ) # end of tabsetPanel
+  ))
+
+server <- function(input, output)({
+  
+#  output$cities_general <- renderDT({
+#   pollution_data_frame %>% 
+#     select(city,aqi) %>% 
+#      rename(City=city,'Air Quality Index'=aqi) %>%
+#      datatable() %>% DT::formatStyle(columns = c(1, 2), fontSize = '140%')
+#  })
+ 
+  output$cities_general <- renderDT({
+font.size <- "120%"
+pollution_data_frame %>% 
+  select(city,aqi) %>% 
+  rename(City=city,'Air Quality Index'=aqi) %>%  
+  DT::datatable(
+    options=list(pageLength = 20,
+      initComplete = htmlwidgets::JS(
+        "function(settings, json) {",
+        paste0("$(this.api().table().container()).css({'font-size': '", font.size, "'});"),
+        "}"),
+      columnDefs = list(list(className = 'dt-center', targets = 2 #"_all"
+                                     )),
+      initComplete = JS(
+  "function(settings, json) {",
+  "$(this.api().table().header()).css({'background-color': 'red', 'color': 'white'});",
+  "}")
+    ) 
+  ) 
+  }) 
+  
+  
+  
+   
+  observeEvent(input$show_cities,{
+    output$cities_map <- renderLeaflet({
+      
+      color_levels <- colorFactor(c("darkgreen","#13ED3F", "yellow", "orange","red"), 
+                                  levels = c(1,2,3,4,5))
+      map_1 <- cities4 %>% leaflet() %>% addTiles() %>% 
+        addCircleMarkers(lng=cities4$lng,
+                         lat=cities4$lat,
+                         color=color_levels(pollution_data_frame$aqi)) %>% 
+        addLegend("bottomright", colors= c("darkgreen","#13ED3F", "yellow", "orange","red"), labels=c("Good","Fair","Moderate","Poor","Very Poor"), title="Current Air Quality") 
+      
+      
+      if(input$show_cities==FALSE){
+        map_1
+      }else{
+        map_1 %>%   addPopups(popup = ~as.character(City))
+      }
+      
+      
+    })
+  }) # end of observeEvent
+  
+  
+  observeEvent(input$select_city,{
+    output$city_map <- renderLeaflet({
+      
+      color_levels <- colorFactor(c("darkgreen","#13ED3F", "yellow", "orange","red"), 
+                                  levels = c(1,2,3,4,5))
+      cities4 %>% leaflet() %>% addTiles() %>% 
+        addCircleMarkers(lng=pollution_data_frame %>% filter(city==input$select_city) %>% pull(lon),
+                         lat=pollution_data_frame %>% filter(city==input$select_city) %>% pull(lat),
+                         color=color_levels(pollution_data_frame$aqi)) %>% 
+        addLegend("bottomright", colors= c("darkgreen","#13ED3F", "yellow", "orange","red"), labels=c("Good","Fair","Moderate","Poor","Very Poor"), title=paste0("Current Air Quality in ",input$select_city)) %>% setView(zoom = 10, 
+                                                                                                                                                                                                                           lng = pollution_data_frame %>% filter(city==input$select_city) %>% pull(lon),
+                                                                                                                                                                                                                           lat = pollution_data_frame %>% filter(city==input$select_city) %>% pull(lat)
+        )
+      
+    })
+  }) # end of observeEvent
+  
+  observeEvent(input$select_city,{
+    #         output$city_details <-renderDT({
+    output$city_details <-renderUI({
+      aa <- pollution_data_frame %>% filter(city==input$select_city) %>% left_join(cities4,by=c("city"="City", "lat"="lat")) %>% select(1,4:16)
+      
+      print(aa)
+      HTML(paste(sep = "",
+                 "<hr>",
+                 "<b><a style=\"font-size:25px\">","City facts","</a></b><br>",
+                 "<b><a style=\"font-size:20px\">","Country: ","</a></b>","<font color=\"orange\">", aa$Country,"</font><br>",
+                 "<b><a style=\"font-size:20px\">","City urban population: ","</a></b>","<font color=\"orange\">",aa$Population,"</font></br>",
+                 "<b><a style=\"font-size:20px\">","City urban area, km&sup2;: ","</a></b>","<font color=\"orange\">",aa$`Area.km2.`,"</font></br>",
+                 "<b><a style=\"font-size:20px\">","City urban density,1/km&sup2;: ","</a></b>","<font color=\"orange\">",aa$`Density..km2.`,"</font></br>",
+                 "<hr>",
+                 "<b><a style=\"font-size:25px\">","Current air quality facts","</a></b><br>",
+                 "<b><a style=\"font-size:20px\">","Air Quality Index: ","</a></b>", "<font color=\"orange\">",aa$aqi, "</font><br>",
+                 "<b><a style=\"font-size:20px\">","Concentration (in &#956;g/m&sup3;)","</a></b><br>",
+                 "<ul>", # unordered list
+                 "<li><b><a>","Carbon Monoxide <i>(CO)</i>: ","</a></b>","<font color=\"orange\">", aa$co, "</font><br></li>",                       
+                 "<li><b><a>","Nitrogen Monoxide <i>(NO)</i>: ","</a></b>","<font color=\"orange\">",aa$no, "</font><br></li>", 
+                 "<li><b><a>","Nitrogen Dioxide <i>(NO<sub>2</sub>)</i>: ","</a></b>","<font color=\"orange\">", aa$no2, "</font></br></li>", 
+                 "<li><b><a>","Ozone <i>(O<sub>3</sub>)</i>: ","</a></b>","<font>", "<font color=\"orange\">",aa$o3, "</font><br></li>",
+                 "<li><b><a>","PM<sub>2.5</sub> particulates: ","</a></b>", "<font color=\"orange\">",aa$pm2_5, "</font><br></li>", 
+                 "<li><b><a>","PM<sub>10</sub> particulates: ","</a></b>","<font color=\"orange\">",aa$pm_10, "</font><br></li>", 
+                 "<li><b><a>", "Ammonia <i>(NH<sub>3</sub>)</i>: ","</a></b>","<font color=\"orange\">", aa$nh3, "</font><br></li>"),
+                  "</ul>")
+    }) 
+  })
+}) # end of server
+
+shinyApp(ui, server)          
+```
+
+---
+
+### 9 Final results
+
+For the full results, which include additional HTML and CSS tuning please see [my Shiny webpage]( https://patternverseltd.shinyapps.io/Pollution_final/)
+ 
+---
+
+
+
+
+
+ 
+ 
+
