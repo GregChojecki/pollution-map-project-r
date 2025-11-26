@@ -21,64 +21,71 @@ This project demonstrates the development of an interactive <strong>pollution ma
 <h2>🔧 App Features</h2>
 
 <h3>🗺️ Tab 1 — World Overview Map</h3>
-<
+<ul>
+  <li>Displays all cities included in the dataset</li>
+  <li>Each city is represented by a colored circle marker indicating pollution severity</li>
+  <li>Colors map to air quality levels for fast comparison</li>
+  <li>Data sourced through APIs and web scraping</li>
+  <li>Useful for understanding global pollution patterns at a glance</li>
+</ul>
 
+<h3>📍 Tab 2 — City Explorer</h3>
+<ul>
+  <li>Dropdown menu to select any specific city</li>
+  <li>Map automatically zooms to the chosen location</li>
+  <li>Side panel displays detailed pollutant metrics</li>
+  <li>Helps users explore detailed, city-specific air quality values</li>
+</ul>
 
-Displays all cities included in the dataset
+<hr>
 
-Each city is shown as a colored circle marker representing its pollution severity
+<h2>📂 Repository Structure</h2>
 
-Colors are mapped to air quality levels for quick comparison
-
-Data is sourced via APIs and web scraping
-
-Useful for understanding global pollution patterns at a glance
-
-📍 Tab 2 — City Explorer
-
-Dropdown menu to select any specific city
-
-Map automatically zooms to the chosen location
-
-A side panel displays detailed pollutant metrics
-
-Helps users understand city-specific air quality levels
-
-Ideal for deeper investigation of environmental conditions
-
-📂 Repository Structure
+<pre>
 pollution-map-project-r/
 ├── Pollution_html.Rmd        # Full workflow + Shiny app
 ├── data/
-│   └── cities_coord.rds      # Preprocessed dataset (backup for Kaggle data)
+│   └── cities_coord.rds      # Preprocessed dataset
 ├── screenshots/
 │   ├── Overview.png          # Screenshot of the global map
-│   └── Details.png           # Screenshot of the city-specific tab
+│   └── Details.png           # Screenshot of city-specific tab
 └── README.md
+</pre>
 
-🖼️ Screenshots
-🌍 Overview Map
+<hr>
 
-📍 City Details View
+<h2>🖼️ Screenshots</h2>
 
-▶️ How to Run
-Option 1 — Knit the R Markdown (recommended)
+<h3>🌍 Overview Map</h3>
+<img src="screenshots/Overview.png" width="600">
 
-Open Pollution_html.Rmd in RStudio
+<h3>📍 City Details View</h3>
+<img src="screenshots/Details.png" width="600">
 
-Click Knit → Knit to HTML
+<hr>
 
-This will generate:
+<h2>▶️ How to Run</h2>
 
-A rendered HTML explanation of the full workflow
+<h3>Option 1 — Knit the R Markdown (recommended)</h3>
+<ol>
+  <li>Open <code>Pollution_html.Rmd</code> in RStudio</li>
+  <li>Click <strong>Knit → Knit to HTML</strong></li>
+</ol>
 
-A Shiny application window launching automatically at the end
+<p>This will produce:</p>
+<ul>
+  <li>A rendered HTML document showing the full workflow</li>
+  <li>A Shiny application window launching automatically at the end</li>
+</ul>
 
-Option 2 — Run only the Shiny app
+<h3>Option 2 — Run only the Shiny app</h3>
+<p>Scroll to the final Shiny code chunk inside the R Markdown file and run it manually.</p>
 
-Scroll to the final Shiny code chunk inside the R Markdown file and run it manually.
+<hr>
 
-📦 Required R Packages
+<h2>📦 Required R Packages</h2>
+
+<pre>
 install.packages(c(
   "dplyr",
   "leaflet",
@@ -92,19 +99,16 @@ install.packages(c(
   "httr",
   "jsonlite"
 ))
+</pre>
 
-📘 Purpose of the Project
+<hr>
 
-This project demonstrates:
+<h2>📘 Purpose of the Project</h2>
 
-Spatial visualization techniques in R
-
-Combining R Markdown with Shiny for dynamic reporting
-
-Integrating API data and web scraping into a reproducible workflow
-
-Pollution data preprocessing and transformation
-
-Building interactive map dashboards
-
-Presenting a complete, end-to-end analytical story
+<ul>
+  <li>Demonstrating spatial visualization techniques in R</li>
+  <li>Integrating <strong>Shiny</strong> inside an <strong>R Markdown</strong> workflow</li>
+  <li>Using APIs and web scraping for reproducible data collection</li>
+  <li>Preprocessing and analyzing pollution datasets</li>
+  <li>Building interactive dashboards for geographic insights</li>
+</ul>
