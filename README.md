@@ -1,21 +1,20 @@
 🌍 Pollution Map (R Markdown + Shiny App)
 
-This project showcases the development of an interactive pollution map built in R using R Markdown, Shiny, API integration, and web scraping.
+This project demonstrates the development of an interactive pollution map built in R using R Markdown, Shiny, API integration, and web scraping.
+
 The workflow includes:
 
 Collecting air quality and geographic data via APIs and web scraping
 
-Cleaning and preprocessing data
+Cleaning and preprocessing raw data
 
 Visualizing pollution levels on an interactive world map
 
 Building a Shiny interface for city-level exploration
 
-Demonstrating the complete analytical journey inside the R Markdown file
+Demonstrating the entire analytical journey inside the R Markdown file
 
-Launching a full Shiny app automatically at the end of the knitted HTML
-
-The final document combines narrative, code walkthroughs, visualizations, and an interactive application.
+Launching a complete Shiny app automatically at the end of the knitted HTML
 
 🔧 App Features
 🗺️ Tab 1 — World Overview Map
