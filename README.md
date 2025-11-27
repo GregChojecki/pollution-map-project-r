@@ -20,7 +20,7 @@ This project demonstrates the development of an interactive <strong>pollution ma
 
 <h2>🔧 App Features</h2>
 
-<h3>🗺️ Tab 1 — World Overview Map</h3>
+<h3>🗺️ Tab 1 - World Overview Map</h3>
 <ul>
   <li>Displays all cities included in the dataset</li>
   <li>Each city is represented by a colored circle marker indicating pollution severity</li>
@@ -29,7 +29,7 @@ This project demonstrates the development of an interactive <strong>pollution ma
   <li>Useful for understanding global pollution patterns at a glance</li>
 </ul>
 
-<h3>📍 Tab 2 — City Explorer</h3>
+<h3>📍 Tab 2 - City Explorer</h3>
 <ul>
   <li>Dropdown menu to select any specific city</li>
   <li>Map automatically zooms to the chosen location</li>
@@ -66,7 +66,7 @@ pollution-map-project-r/
 
 <h2>▶️ How to Run</h2>
 
-<h3>Option 1 — Knit the R Markdown (recommended)</h3>
+<h3>Option 1 - Knit the R Markdown (recommended)</h3>
 <ol>
   <li>Open <code>Pollution_html.Rmd</code> in RStudio</li>
   <li>Click <strong>Knit → Knit to HTML</strong></li>
@@ -78,7 +78,7 @@ pollution-map-project-r/
   <li>A Shiny application window launching automatically at the end</li>
 </ul>
 
-<h3>Option 2 — Run only the Shiny app</h3>
+<h3>Option 2 - Run only the Shiny app</h3>
 <p>Scroll to the final Shiny code chunk inside the R Markdown file and run it manually.</p>
 
 <hr>
