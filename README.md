@@ -1,7 +1,7 @@
 <h1>🌍 Pollution Map (R Markdown + Shiny App)</h1>
 
 <p>
-This project demonstrates the development of an interactive <strong>pollution map</strong> built in R using 
+This project demonstrates the development of an interactive <strong>pollution map</strong> built in <strong>R</strong> using 
 <strong>R Markdown</strong>, <strong>Shiny</strong>, <strong>API integration</strong>, and <strong>web scraping</strong>.
 </p>
 
